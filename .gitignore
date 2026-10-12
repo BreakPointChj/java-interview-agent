@@ -1,0 +1,19 @@
+# 密钥与本地配置
+.env
+
+# Python/测试缓存
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 虚拟环境与运行数据
+.venv/
+data/*.db
+data/*.db-*
+logs/
+
+# 编辑器
+.idea/
+.vscode/

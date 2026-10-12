@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="基于 LangChain 与 LangGraph 的 Java 全栈智能面试 Agent">
+  <title>Java 全栈面试 Agent</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="返回首页">
+      <span class="brand-mark">JA</span>
+      <span><strong>Interview Agent</strong><small>Java 全栈智能面试官</small></span>
+    </a>
+    <nav class="top-actions" aria-label="辅助导航">
+      <button id="study-nav" class="study-nav-button" type="button">✦ 智能复习</button>
+      <span id="service-status" class="status-pill"><i></i><span>连接中</span></span>
+      <a href="/docs" target="_blank" class="text-link">API 文档 ↗</a>
+    </nav>
+  </header>
+
+  <main class="app-shell">
+    <!-- 首页：介绍、面试配置以及跨会话画像。 -->
+    <section id="setup-view" class="view active">
+      <div class="hero">
+        <div class="hero-copy">
+          <span class="eyebrow">LANGCHAIN · LANGGRAPH · PERSISTENT MEMORY</span>
+          <h1>不只是问答，<br><em>真正理解</em>你的技术面试官</h1>
+          <p>八大技术领域、动态难度、逐题深度反馈。你的每一次回答都会沉淀为长期能力画像。</p>
+          <div class="feature-strip">
+            <span><b>8</b> 技术领域</span>
+            <span><b>3</b> 难度等级</span>
+            <span><b>∞</b> 会话记忆</span>
+          </div>
+          <button id="hero-study-button" class="study-cta" type="button">有问题？进入智能复习问答 <span>→</span></button>
+        </div>
+
+        <div class="setup-card surface">
+          <div class="card-heading">
+            <div><span class="step-label">创建面试</span><h2>定制你的面试方案</h2></div>
+            <button id="load-profile" class="icon-button" type="button" title="刷新候选人记录">↻</button>
+          </div>
+
+          <form id="setup-form">
+            <div class="form-grid">
+              <label class="field">
+                <span>候选人 ID</span>
+                <input id="candidate-id" name="candidate_id" value="demo-user" maxlength="100" required>
+              </label>
+              <label class="field">
+                <span>姓名</span>
+                <input id="candidate-name" name="candidate_name" value="候选人" maxlength="100" required>
+              </label>
+            </div>
+
+            <fieldset class="topic-fieldset">
+              <div class="fieldset-title">
+                <legend>选择技术领域</legend>
+                <button id="toggle-topics" type="button" class="mini-link">全选</button>
+              </div>
+              <div id="topic-options" class="topic-grid"></div>
+            </fieldset>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>目标难度</span>
+                <select id="difficulty" name="difficulty">
+                  <option value="初级">初级 · 夯实基础</option>
+                  <option value="中级" selected>中级 · 项目实践</option>
+                  <option value="高级">高级 · 原理架构</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>题目数量 <output id="question-count-label">8</output></span>
+                <input id="question-count" name="total_questions" type="range" min="1" max="20" value="8">
+              </label>
+            </div>
+
+            <button id="start-button" class="primary-button" type="submit">
+              <span>开始智能面试</span><b>→</b>
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <section class="profile-section">
+        <div class="section-heading">
+          <div><span class="step-label">MEMORY</span><h2>候选人长期画像</h2></div>
+          <p id="profile-hint">输入候选人 ID 后刷新，可恢复历史会话</p>
+        </div>
+        <div id="profile-empty" class="empty-state surface">
+          <span class="empty-icon">◎</span>
+          <div><strong>还没有面试记录</strong><p>完成第一道题后，这里会逐步形成你的能力画像。</p></div>
+        </div>
+        <div id="profile-content" class="profile-content hidden">
+          <div id="profile-stats" class="stats-grid"></div>
+          <div class="surface history-card">
+            <div class="card-heading"><h3>最近面试</h3><span>支持从上次进度继续</span></div>
+            <div id="session-history" class="session-list"></div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <!-- 复习问答页：自由提问并保留多轮上下文。 -->
+    <section id="study-view" class="view">
+      <div class="interview-header">
+        <button class="back-button" data-action="home" type="button">← 返回首页</button>
+        <div class="study-title"><span class="step-label">KNOWLEDGE COACH</span><h1>智能复习助手</h1></div>
+        <button id="new-study-chat" class="secondary-button small" type="button">＋ 新对话</button>
+      </div>
+      <div class="study-layout">
+        <aside class="study-sidebar surface">
+          <h3>复习领域</h3>
+          <p>选择领域可以让回答更加聚焦</p>
+          <div id="study-topic-options" class="study-topics"></div>
+          <div class="study-divider"></div>
+          <h3>最近复习</h3>
+          <div id="study-history" class="study-history"><span>暂无复习对话</span></div>
+        </aside>
+
+        <section class="chat-card surface">
+          <div id="chat-messages" class="chat-messages">
+            <div class="welcome-message">
+              <span class="assistant-avatar">AI</span>
+              <div><h2>今天想复习什么？</h2><p>你可以询问概念原理、源码机制、场景选型，也可以让我对比技术方案或整理面试回答。</p></div>
+            </div>
+            <div id="quick-questions" class="quick-questions">
+              <button type="button">JVM 内存区域与常见 OOM 有哪些？</button>
+              <button type="button">Spring 事务为什么会失效？</button>
+              <button type="button">Redis 缓存一致性应该怎么保证？</button>
+              <button type="button">LangGraph 如何实现多轮状态管理？</button>
+            </div>
+          </div>
+          <div class="chat-composer">
+            <textarea id="study-question" maxlength="10000" rows="3" placeholder="输入你想复习的技术问题，支持连续追问…"></textarea>
+            <div class="composer-footer">
+              <span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> 发送</span>
+              <button id="send-study-question" type="button">发送 <b>↑</b></button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- 面试页：题目与回答区域分离，评价返回后由用户主动进入下一题。 -->
+    <section id="interview-view" class="view">
+      <div class="interview-header">
+        <button class="back-button" data-action="home" type="button">← 返回首页</button>
+        <div class="session-meta">会话 <code id="session-short-id">—</code></div>
+      </div>
+
+      <div class="progress-panel surface">
+        <div class="progress-copy">
+          <span id="progress-label">第 1 题 / 共 8 题</span>
+          <strong id="progress-percent">0%</strong>
+        </div>
+        <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+      </div>
+
+      <div class="interview-layout">
+        <article class="question-card surface">
+          <div class="question-topline">
+            <span id="question-topic" class="topic-badge">Java</span>
+            <span id="question-difficulty" class="difficulty-badge">中级</span>
+          </div>
+          <span id="question-number" class="question-kicker">QUESTION 01</span>
+          <h1 id="question-text">正在准备题目…</h1>
+          <div id="follow-up-hint" class="follow-up-hint hidden">
+            <span>↳</span><p><strong>深入方向</strong>回答充分后，面试官会关注相关延伸问题。</p>
+          </div>
+        </article>
+
+        <aside class="answer-card surface">
+          <div class="answer-heading"><h2>你的回答</h2><span>结构清晰、结合案例会获得更准确的评价</span></div>
+          <textarea id="answer-input" maxlength="20000" placeholder="请在这里组织你的回答…\n\n建议包含：核心概念、工作原理、适用场景与实践经验。"></textarea>
+          <div class="answer-footer">
+            <span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> 提交</span>
+            <span id="answer-length">0 / 20000</span>
+          </div>
+          <button id="submit-answer" class="primary-button" type="button">
+            <span>提交并获取评价</span><b>↗</b>
+          </button>
+        </aside>
+      </div>
+
+      <section id="evaluation-panel" class="evaluation-panel surface hidden" aria-live="polite">
+        <div class="score-ring" id="score-ring"><strong id="score-value">0</strong><span>本题得分</span></div>
+        <div class="evaluation-body">
+          <div class="card-heading"><div><span class="step-label">AI FEEDBACK</span><h2>面试官评价</h2></div></div>
+          <p id="feedback-text" class="feedback-lead"></p>
+          <div class="feedback-grid">
+            <div class="feedback-box positive"><h3>✓ 回答亮点</h3><ul id="strength-list"></ul></div>
+            <div class="feedback-box warning"><h3>△ 改进方向</h3><ul id="weakness-list"></ul></div>
+          </div>
+          <details class="suggested-answer">
+            <summary>查看参考回答思路</summary>
+            <p id="suggested-answer-text"></p>
+          </details>
+          <button id="continue-button" class="primary-button compact" type="button">进入下一题 →</button>
+        </div>
+      </section>
+    </section>
+
+    <!-- 报告页：聚合本次表现，并保留每轮问答供复盘。 -->
+    <section id="report-view" class="view">
+      <div class="report-hero">
+        <span class="report-icon">✓</span>
+        <span class="eyebrow">INTERVIEW COMPLETED</span>
+        <h1>面试完成，做得不错</h1>
+        <p>下面是基于本次回答与长期记忆生成的能力分析。</p>
+      </div>
+      <div class="report-grid">
+        <div class="surface total-score-card">
+          <span>综合得分</span><strong id="report-score">0</strong><small>/ 100</small>
+          <p id="report-level">继续积累</p>
+        </div>
+        <div class="surface topic-report-card">
+          <div class="card-heading"><h2>领域表现</h2><span id="answered-count"></span></div>
+          <div id="topic-scores" class="topic-scores"></div>
+        </div>
+      </div>
+      <div class="report-detail-grid">
+        <div class="surface feedback-box positive"><h3>核心优势</h3><ul id="report-strengths"></ul></div>
+        <div class="surface feedback-box warning"><h3>优先改进</h3><ul id="report-improvements"></ul></div>
+      </div>
+      <div class="surface learning-card"><span>学习建议</span><p id="learning-suggestion"></p></div>
+      <div class="surface review-card">
+        <div class="card-heading"><h2>逐题复盘</h2><span>展开查看回答与评价</span></div>
+        <div id="answer-review" class="answer-review"></div>
+      </div>
+      <div class="report-actions">
+        <button class="secondary-button" data-action="home" type="button">返回个人面板</button>
+        <button id="restart-button" class="primary-button compact" type="button">开始新面试 →</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="loading-overlay" class="loading-overlay hidden" role="status">
+    <div class="loader"></div><strong id="loading-text">面试官正在思考…</strong><span>正在结合题目要点与历史上下文进行分析</span>
+  </div>
+  <div id="toast" class="toast" role="alert"></div>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
