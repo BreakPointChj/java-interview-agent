@@ -8,18 +8,24 @@
 
 ## 2. 当前覆盖范围
 
-`interview_agent/data/knowledge_base.json` 包含 64 组标准问答，每个领域至少 8 组；这些条目还会自动加入原题库，因此模拟面试目前共有 93 道可抽取题目。
+知识库由三个 UTF-8 JSON 文件组成：`knowledge_base.json` 保存 64 组通用基础题，
+`knowledge_base_practical.json` 保存 25 组结合项目经历与复习资料整理的实战题，
+`knowledge_base_supplement.json` 保存 10 组 Nacos、OpenFeign、Gateway、Vue、线程任务和数据库
+范式补充题。加载器会合并 `knowledge_base*.json` 并校验 ID 唯一性；这些条目还会自动加入
+模拟面试题库，因此当前共有 99 组标准问答和 128 道可抽取题目。
 
 | 领域 | 可抽取题数 | 主要知识体系 |
 |---|---:|---|
-| Java | 13 | 集合、并发、线程池、JMM、JVM、类加载、GC、锁 |
-| Python | 12 | GIL、异步、生成器、装饰器、内存管理、描述符、元类 |
-| Spring | 12 | IOC、Bean 生命周期、循环依赖、事务、AOP、MVC、自动配置 |
-| LangChain | 11 | LCEL、Runnable、RAG、结构化输出、记忆、切分、评测、安全 |
-| LangGraph | 11 | 状态图、Checkpointer、HITL、Reducer、子图、多 Agent、幂等 |
-| 数据库 | 12 | 索引、MVCC、事务、SQL 优化、日志、锁、分片、数据库选型 |
-| 缓存 | 11 | 缓存三大问题、一致性、Redis 锁/结构/持久化/集群/淘汰 |
-| 消息队列 | 11 | 可靠性、幂等、顺序、Kafka、RabbitMQ、再均衡、消息积压 |
+| Java | 17 | 集合、并发、JVM、CPU/Full GC 排障、任务提交、批量处理与背压 |
+| Python | 13 | GIL、异步、生成器、内存管理、大文件流式处理与失败留痕 |
+| Spring | 15 | IOC、事务、AOP、Kafka 落库、第三方接口、Docker 网络排障 |
+| LangChain | 14 | LCEL、RAG、结构化输出、切分、证据引用、分层评测 |
+| LangGraph | 13 | 状态图、Checkpointer、HITL、故障恢复、外部副作用幂等 |
+| 数据库 | 19 | MySQL、ClickHouse、Elasticsearch、数据库范式、统计模型和生产排障 |
+| 缓存 | 12 | 缓存三大问题、一致性、Redis、统计缓存键和迟到数据失效 |
+| 消息队列 | 17 | Kafka、Syslog、幂等、Offset、积压和多目标外发隔离 |
+| 微服务 | 7 | Nacos 容灾/健康检查/配置刷新、OpenFeign、Spring Cloud Gateway |
+| 前端 | 1 | Vue 2 到 Vue 3 的工程迁移、兼容验证和响应式边界 |
 
 “所有可能问到的问题”无法形成有限集合：技术版本、公司业务和追问方式会持续变化。本项目覆盖的是八个领域的高频核心知识族，并通过别名、向量召回、在线模型 RAG 和可扩展 JSON 结构覆盖不同问法。开放性或知识库之外的问题在在线模式仍可由模型回答；离线模式在低置信度时会明确提示补充问题，而不会输出不匹配答案。
 
@@ -35,7 +41,12 @@
   "keywords": ["CPU密集", "IO密集", "线程池", "corePoolSize"],
   "answer": "与该问题严格对应的标准答案",
   "key_points": ["CPU 密集约为核数+1", "IO 密集按等待/计算比估算"],
-  "follow_up_questions": ["线程池的七个核心参数分别是什么？"]
+  "follow_up_questions": ["线程池的七个核心参数分别是什么？"],
+  "project_context": "该问题对应的真实工作场景（可选）",
+  "practical_steps": ["实际落地步骤 1", "实际落地步骤 2"],
+  "example": "可执行的 Java/SQL/命令/配置示例",
+  "verification": ["结果怎样验证", "故障怎样定位"],
+  "pitfalls": ["容易夸大或做错的地方"]
 }
 ```
 
@@ -45,6 +56,15 @@
 - `answer`：只回答当前问题，不包含其他题目的拼接内容。
 - `key_points`：用于前端摘要，也作为模拟面试评分点。
 - `follow_up_questions`：与当前知识直接相关的深入问题。
+- `project_context`：说明知识在什么业务链路中使用，不写个人或公司隐私。
+- `practical_steps`：可执行的实施顺序，避免只背定义。
+- `example`：代码、SQL、命令、配置或计算公式；内容必须能支持当前答案。
+- `verification`：上线前验证、指标检查和故障排查方法。
+- `pitfalls`：明确能力边界、失败条件和常见错误，避免把设计建议说成已上线事实。
+
+`KnowledgeEntry.render_answer()` 会按“直接答案—实际场景—落地步骤—示例—验证—易错点”
+组合这些字段。离线模式直接返回完整实战答案；在线模式把同一内容作为 RAG 事实依据注入模型，
+因此两个模式不会只显示一个概念定义。
 
 ## 4. 向量匹配流程
 
@@ -75,13 +95,24 @@
 
 ## 6. 如何扩充题库
 
-在 `interview_agent/data/knowledge_base.json` 追加符合 schema 的对象即可。建议遵循：
+通用基础题追加到 `interview_agent/data/knowledge_base.json`，项目实战题追加到
+`interview_agent/data/knowledge_base_practical.json`，专项补充题追加到
+`interview_agent/data/knowledge_base_supplement.json`。建议遵循：
 
 1. ID 使用 `kb-领域-序号` 且保持唯一；
 2. 一个条目只回答一个清晰问题；
 3. 至少提供两个真实常见别名和三个有区分度的关键词；
-4. 答案包含结论、原理和关键取舍，但避免依赖易过时的具体版本数字；
+4. 实战题必须包含业务场景、至少三个落地步骤、示例、验证方法和易错点；
 5. 要点应能用于面试评分，追问必须与本题直接相关；
 6. 扩充后运行 `pytest`，并为易混淆问题增加检索回归测试。
+
+本次实战题从用户提供的简历和复习资料提炼技术场景，但没有复制姓名、联系方式、公司名等
+个人信息。题目只陈述资料明确确认的工作内容；资料未确认是否实际上线的重试、死信、熔断等
+能力，会明确标为设计建议或验证方法，避免面试回答失真。
+
+Nacos、Spring Cloud 和 Vue 等版本敏感内容需要以当前项目依赖和官方文档为准。例如旧版 Nacos
+配置监听常用长轮询和 MD5，3.x 官方客户端已转向长连接；Nacos 临时实例也需要区分旧 HTTP
+心跳和 gRPC 连接模型。题库因此优先解释稳定链路，并把固定时间参数写成需要现场确认的配置，
+避免死背某个版本的默认值。
 
 生产规模达到数千或数万条时，可保持 `KnowledgeEntry` 和 `SearchResult` 接口不变，将内存 TF-IDF 替换为 embedding + pgvector/专用向量库，并增加 reranker。标准答案仍应保存在可版本化的关系型/文档存储中，而不是只存在向量索引里。

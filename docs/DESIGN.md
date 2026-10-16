@@ -23,7 +23,10 @@ langchain-test/
 │  ├─ question_bank.py   # 八领域三级题库及自适应选题
 │  ├─ service.py         # 核心业务编排和报告聚合
 │  ├─ study.py           # 多轮技术复习问答与离线知识检索
-│  ├─ data/              # UTF-8 结构化标准问答知识库
+│  ├─ data/
+│  │  ├─ knowledge_base.json            # 通用基础问答
+│  │  ├─ knowledge_base_practical.json  # 项目实战问答与验证步骤
+│  │  └─ knowledge_base_supplement.json # 微服务、前端与补充实战问答
 │  └─ web/               # 原生 HTML/CSS/JS 响应式单页界面
 ├─ tests/                # 题库、记忆、工作流端到端测试
 ├─ docs/DESIGN.md        # 本设计文档
@@ -77,6 +80,11 @@ LangGraph 条件路由 ── start ──► 创建画像与会话 ──► �
 
 复习检索不是简单字符计数：系统对问题、别名、关键词和核心要点建立 TF-IDF 稀疏向量，使用余弦相似度召回，并以别名精确命中、关键词和领域提示作有限加权。当前问题权重高于领域提示，因此用户误选领域时，明确的问题语义仍可命中正确答案。低于置信度阈值时系统明确表示未匹配，不再拼接多个无关题目的要点。
 
+项目实战知识使用结构化字段保存：`project_context` 说明业务场景，`practical_steps` 给出
+实施顺序，`example` 保存代码/SQL/配置，`verification` 描述如何证明结果正确，`pitfalls`
+记录边界和错误做法。`render_answer()` 在返回页面或注入在线 RAG 前统一组合这些内容，保证
+问题与答案严格对应，也让回答能够落到具体工作动作。
+
 ## 5. 评分与提示词设计
 
 在线评分由 `ChatPromptTemplate | ChatOpenAI.with_structured_output(Evaluation)` 组成。Pydantic 将分数限制在 0 到 100，并固定优势、弱点、遗漏点、反馈和建议答案字段。提示词包含：
@@ -128,7 +136,9 @@ LangGraph 条件路由 ── start ──► 创建画像与会话 ──► �
 
 ### 扩展题库
 
-在 `QUESTION_DATA` 增加元组，并保证 ID 唯一；若新增领域，同时加入 `SUPPORTED_TOPICS`。参考点应是可判定的概念，不要直接写大段标准答案。
+通用面试题可在 `QUESTION_DATA` 增加元组；带标准答案的知识题应写入
+`data/knowledge_base*.json`，加载时会自动加入模拟面试。所有 ID 必须唯一；若新增领域，同时
+加入 `SUPPORTED_TOPICS`。项目实战题还必须包含步骤、示例、验证和易错点，不能只给概念。
 
 ### 更换模型供应商
 
@@ -148,6 +158,7 @@ LangGraph 条件路由 ── start ──► 创建画像与会话 ──► �
 测试默认使用临时 SQLite 和离线评估器，不读取 `.env`、不访问网络：
 
 - `test_question_bank.py` 验证领域覆盖、未知领域拒绝和不重复出题。
+- `test_knowledge.py` 验证八领域覆盖、问答向量匹配和项目实战字段完整性。
 - `test_memory.py` 验证新仓储实例能恢复会话、问答及长期画像。
 - `test_workflow.py` 完成两轮面试，验证评分、下一题、结束状态和报告闭环。
 

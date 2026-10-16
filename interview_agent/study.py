@@ -34,6 +34,7 @@ STUDY_PROMPT = ChatPromptTemplate.from_messages(
             "system",
             """你是资深 Java 全栈面试辅导老师，擅长 Java、Python、Spring、LangChain、
 LangGraph、数据库、缓存和消息队列。你的任务是帮助用户理解知识并准备面试，而不是评价回答。
+同时覆盖 Nacos、OpenFeign、Spring Cloud Gateway 等微服务组件和 Vue 前端工程实践。
 回答要求：
 1. 先直接回答问题，再解释原理、适用场景、常见误区和面试表达方式；
 2. 难度匹配候选人画像，概念准确，必要时给简短代码或示例；
@@ -123,7 +124,7 @@ class LangChainKnowledgeAssistant:
         if not relevant:
             return "未检索到高相关条目"
         return "\n\n".join(
-            f"问题：{item.entry.question}\n标准知识：{item.entry.answer}\n"
+            f"问题：{item.entry.question}\n标准知识：{item.entry.render_answer()}\n"
             f"要点：{'、'.join(item.entry.key_points)}"
             for item in relevant
         )
@@ -163,7 +164,7 @@ class OfflineKnowledgeAssistant:
         entry = primary.entry
         return StudyAnswer(
             topic=entry.topic,
-            answer=entry.answer,
+            answer=entry.render_answer(),
             key_points=entry.key_points,
             follow_up_questions=entry.follow_up_questions,
             matched_questions=[entry.question],

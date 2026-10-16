@@ -13,6 +13,7 @@ htmlcov/
 data/*.db
 data/*.db-*
 logs/
+/tmp/
 
 # 编辑器
 .idea/

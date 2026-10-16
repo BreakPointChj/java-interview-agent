@@ -26,6 +26,32 @@ class KnowledgeEntry(BaseModel):
     answer: str
     key_points: list[str]
     follow_up_questions: list[str] = Field(default_factory=list)
+    project_context: str | None = None
+    practical_steps: list[str] = Field(default_factory=list)
+    example: str | None = None
+    verification: list[str] = Field(default_factory=list)
+    pitfalls: list[str] = Field(default_factory=list)
+
+    def render_answer(self) -> str:
+        """把结构化实战信息组合成适合网页直接阅读的完整中文答案。"""
+
+        sections = [self.answer.strip()]
+        if self.project_context:
+            sections.append(f"实际工作场景：{self.project_context.strip()}")
+        if self.practical_steps:
+            steps = "\n".join(
+                f"{index}. {step}" for index, step in enumerate(self.practical_steps, start=1)
+            )
+            sections.append(f"落地步骤：\n{steps}")
+        if self.example:
+            sections.append(f"代码/SQL/配置示例：\n{self.example.strip()}")
+        if self.verification:
+            checks = "\n".join(f"- {item}" for item in self.verification)
+            sections.append(f"验证与排查：\n{checks}")
+        if self.pitfalls:
+            warnings = "\n".join(f"- {item}" for item in self.pitfalls)
+            sections.append(f"易错点：\n{warnings}")
+        return "\n\n".join(sections)
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,9 +66,22 @@ class KnowledgeBase:
     """加载知识库并在内存中构建稀疏 TF-IDF 向量索引。"""
 
     def __init__(self, data_path: Path | None = None) -> None:
-        path = data_path or Path(__file__).resolve().parent / "data" / "knowledge_base.json"
-        raw_data = json.loads(path.read_text(encoding="utf-8"))
+        if data_path:
+            paths = [data_path]
+        else:
+            data_dir = Path(__file__).resolve().parent / "data"
+            paths = sorted(data_dir.glob("knowledge_base*.json"))
+        raw_data: list[dict[str, object]] = []
+        for path in paths:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(loaded, list):
+                raise ValueError(f"知识库文件必须是 JSON 数组：{path}")
+            raw_data.extend(loaded)
         self.entries = [KnowledgeEntry.model_validate(item) for item in raw_data]
+        ids = [entry.id for entry in self.entries]
+        if len(ids) != len(set(ids)):
+            duplicates = sorted({entry_id for entry_id in ids if ids.count(entry_id) > 1})
+            raise ValueError(f"知识库存在重复 ID：{', '.join(duplicates)}")
         self._idf: dict[str, float] = {}
         self._vectors: list[dict[str, float]] = []
         self._build_index()
@@ -84,7 +123,13 @@ class KnowledgeBase:
         """索引问题侧字段，不把长答案放入向量以免无关词稀释主题。"""
 
         return " ".join(
-            [entry.topic, entry.question, *entry.aliases, *entry.keywords, *entry.key_points]
+            [
+                entry.topic,
+                entry.question,
+                *entry.aliases,
+                *entry.keywords,
+                *entry.key_points,
+            ]
         )
 
     def _build_index(self) -> None:
